@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Резонансное дыхание</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  @property --c { syntax: '<color>'; inherits: true; initial-value: #7fe0d0; }
+
+  :root {
+    --night: #0b1522;
+    --deep: #11263a;
+    --panel: #14222f;
+    --line: #2a4152;
+    --text: #e9f2f3;
+    --muted: #a3b8c0;
+    --inhale: #7fe0d0;
+    --exhale: #f3b79b;
+    --ink: #0b1522;
+    --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sans: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 30% 20%, var(--deep) 0%, var(--night) 65%) fixed;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  .app {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    display: grid;
+    gap: 28px;
+    grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
+    align-items: start;
+  }
+  header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 34px; margin: 0; letter-spacing: .01em; }
+  header p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* ---------- Сцена ---------- */
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+  .orb-wrap {
+    --c: var(--inhale);
+    transition: --c 1.4s ease;
+    position: relative;
+    width: min(88vw, 470px);
+    aspect-ratio: 1;
+  }
+  .orb-wrap.exhale { --c: var(--exhale); }
+  .orb-wrap.idle { --c: #9fc9d6; }
+  .orb-wrap.hold { --c: #c4b9f4; }
+
+  .orb-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .track { fill: none; stroke: var(--line); stroke-width: 3; }
+  .arc {
+    fill: none; stroke: var(--c); stroke-width: 7; stroke-linecap: round;
+    transform: rotate(-90deg); transform-origin: 200px 200px;
+    stroke-dasharray: 1181.4; stroke-dashoffset: 1181.4;
+    filter: drop-shadow(0 0 6px var(--c));
+  }
+
+  .orb {
+    position: absolute; inset: 6%;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 36% 30%, rgba(255,255,255,.95) 0%, var(--c) 34%,
+        color-mix(in srgb, var(--c) 45%, var(--night)) 100%);
+    box-shadow:
+      0 0 70px 6px color-mix(in srgb, var(--c) 38%, transparent),
+      inset 0 -18px 40px color-mix(in srgb, var(--night) 35%, transparent);
+    transform: scale(.38);
+    will-change: transform;
+  }
+
+  .center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--ink);
+    text-align: center;
+    pointer-events: none;
+  }
+  .word { font-family: var(--serif); font-weight: 600; font-size: clamp(34px, 9vw, 52px); line-height: 1; }
+  .count { font-family: var(--sans); font-weight: 700; font-size: clamp(26px, 6.5vw, 36px); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .center.hold .word { font-size: clamp(28px, 7.5vw, 40px); }
+  .center.idle .word { font-size: clamp(26px, 7vw, 38px); }
+  .center.idle .count { font-size: 16px; font-weight: 600; max-width: 9em; line-height: 1.25; }
+
+  .wave-box {
+    width: min(100%, 560px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--panel) 70%, transparent);
+    padding: 8px 10px 4px;
+  }
+  canvas { display: block; width: 100%; height: 110px; }
+  .wave-cap { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; padding: 2px 4px 4px; }
+
+  .stats { display: flex; gap: 40px; justify-content: center; }
+  .stat { text-align: center; }
+  .stat b { display: block; font-family: var(--serif); font-size: 36px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stat span { color: var(--muted); font-size: 15px; }
+
+  /* ---------- Настройки ---------- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 22px 20px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+  .panel h2 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin: 0 0 6px; }
+  .row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-weight: 600; font-size: 17px; }
+  .stepper { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 10px; }
+  .stepper output {
+    text-align: center; font-family: var(--serif); font-size: 38px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .stepper output small { font-family: var(--sans); font-size: 16px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+
+  button {
+    font: inherit; color: var(--text); cursor: pointer;
+    background: #1c3144; border: 1px solid var(--line); border-radius: 14px;
+    min-height: 56px; padding: 0 16px;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  button:hover:not(:disabled) { background: #24415a; }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid #ffe08a; outline-offset: 2px; }
+  .step { font-size: 30px; font-weight: 700; padding: 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 48px; font-size: 16px; padding: 0 14px; }
+  .chip[aria-pressed="true"] { background: var(--inhale); color: var(--ink); border-color: var(--inhale); font-weight: 700; }
+
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle button { min-width: 96px; }
+  .toggle button[aria-pressed="true"] { background: var(--inhale); color: var(--ink); border-color: var(--inhale); font-weight: 700; }
+
+  .summary { color: var(--muted); font-size: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .summary b { color: var(--text); }
+
+  .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+  .go {
+    min-height: 68px; font-size: 22px; font-weight: 700;
+    background: var(--inhale); color: var(--ink); border-color: var(--inhale);
+  }
+  .go:hover:not(:disabled) { background: #a2ecdf; }
+  .reset { min-height: 68px; }
+
+  .hint { color: var(--muted); font-size: 15px; margin: 0; }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    h1 { font-size: 30px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .orb-wrap { transition: none; }
+    button { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <h1>Резонансное дыхание</h1>
+    <p>Следите за шаром: растёт — вдыхаем, сжимается — выдыхаем.</p>
+  </header>
+
+  <section class="stage" aria-label="Визуализация дыхания">
+    <div class="orb-wrap idle" id="orbWrap">
+      <svg viewBox="0 0 400 400" aria-hidden="true">
+        <circle class="track" cx="200" cy="200" r="188"/>
+        <circle class="arc" id="arc" cx="200" cy="200" r="188"/>
+      </svg>
+      <div class="orb" id="orb"></div>
+      <div class="center idle" id="center" aria-live="off">
+        <div class="word" id="word">Готовы?</div>
+        <div class="count" id="count">Нажмите «Начать»</div>
+      </div>
+    </div>
+
+    <div class="wave-box">
+      <canvas id="wave" aria-hidden="true"></canvas>
+      <div class="wave-cap"><span>что было</span><span>что будет</span></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="timeLeft">10:00</b><span>осталось</span></div>
+      <div class="stat"><b id="breaths">0</b><span>дыханий</span></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Настройки">
+    <div>
+      <h2>Настройки</h2>
+      <p class="hint">Изменять можно, пока сеанс не идёт.</p>
+    </div>
+
+    <div class="row">
+      <span class="label">Готовые ритмы</span>
+      <div class="chips" id="presets">
+        <button class="chip" data-p="5.5,0,5.5,0">Резонанс 5,5 / 5,5</button>
+        <button class="chip" data-p="4,0,6,0">Резонанс 4 / 6</button>
+        <button class="chip" data-p="5,0,5,0">Когерентное 5 / 5</button>
+        <button class="chip" data-p="4,4,4,4">Квадрат 4-4-4-4</button>
+        <button class="chip" data-p="4,0,8,0">Спокойствие 4 / 8</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label" id="lblIn">Вдох</span>
+      <div class="stepper">
+        <button class="step" id="inMinus" aria-label="Вдох короче">−</button>
+        <output id="inVal" aria-labelledby="lblIn">5,5<small>сек</small></output>
+        <button class="step" id="inPlus" aria-label="Вдох длиннее">+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label" id="lblHin">Задержка после вдоха (0 — без неё)</span>
+      <div class="stepper">
+        <button class="step" id="hinMinus" aria-label="Задержка после вдоха короче">−</button>
+        <output id="hinVal" aria-labelledby="lblHin">0<small>сек</small></output>
+        <button class="step" id="hinPlus" aria-label="Задержка после вдоха длиннее">+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label" id="lblEx">Выдох</span>
+      <div class="stepper">
+        <button class="step" id="exMinus" aria-label="Выдох короче">−</button>
+        <output id="exVal" aria-labelledby="lblEx">5,5<small>сек</small></output>
+        <button class="step" id="exPlus" aria-label="Выдох длиннее">+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label" id="lblHex">Пауза после выдоха (0 — без неё)</span>
+      <div class="stepper">
+        <button class="step" id="hexMinus" aria-label="Пауза после выдоха короче">−</button>
+        <output id="hexVal" aria-labelledby="lblHex">0<small>сек</small></output>
+        <button class="step" id="hexPlus" aria-label="Пауза после выдоха длиннее">+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label">Длительность сеанса</span>
+      <div class="chips" id="durations">
+        <button class="chip" data-m="5">5 мин</button>
+        <button class="chip" data-m="10">10 мин</button>
+        <button class="chip" data-m="15">15 мин</button>
+        <button class="chip" data-m="20">20 мин</button>
+      </div>
+    </div>
+
+    <div class="toggle">
+      <span class="label">Мягкий звук на смене фазы</span>
+      <button id="soundBtn" aria-pressed="true">Вкл</button>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="actions">
+      <button class="go" id="goBtn">Начать</button>
+      <button class="reset" id="resetBtn" aria-label="Сбросить сеанс" disabled>Сброс</button>
+    </div>
+
+    <p class="hint">Дышите носом, спокойно, животом. Если закружилась голова — вернитесь к обычному дыханию. Пробел — старт и пауза.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const INHALE_COLOR = '#7fe0d0', EXHALE_COLOR = '#f3b79b', HOLD_COLOR = '#c4b9f4';
+  const PHASE_WORD = { inhale: 'Вдох', holdIn: 'Держим', exhale: 'Выдох', holdOut: 'Пауза' };
+  const PHASE_TONE = { inhale: 440, holdIn: 392, exhale: 330, holdOut: 262 };
+  const $ = id => document.getElementById(id);
+  const el = {
+    wrap: $('orbWrap'), orb: $('orb'), arc: $('arc'), center: $('center'),
+    word: $('word'), count: $('count'), wave: $('wave'),
+    timeLeft: $('timeLeft'), breaths: $('breaths'), summary: $('summary'),
+    go: $('goBtn'), reset: $('resetBtn'), sound: $('soundBtn'),
+    inVal: $('inVal'), exVal: $('exVal'),
+    inMinus: $('inMinus'), inPlus: $('inPlus'), exMinus: $('exMinus'), exPlus: $('exPlus'),
+    hinVal: $('hinVal'), hexVal: $('hexVal'),
+    hinMinus: $('hinMinus'), hinPlus: $('hinPlus'), hexMinus: $('hexMinus'), hexPlus: $('hexPlus'),
+    presets: $('presets'), durations: $('durations'),
+  };
+  const ARC_LEN = 1181.4;
+  const MIN_S = 2, MAX_S = 12, STEP = 0.5;
+
+  // ---------- Состояние ----------
+  const cfg = { inh: 5.5, hin: 0, exh: 5.5, hex: 0, dur: 10, sound: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem('resBreath') || 'null');
+    if (saved) Object.assign(cfg, saved);
+  } catch (_) {}
+  const save = () => { try { localStorage.setItem('resBreath', JSON.stringify(cfg)); } catch (_) {} };
+
+  const run = { running: false, startedAt: 0, before: 0, lastPhase: null, finished: false, summaryText: '' };
+  let audio = null, wakeLock = null;
+
+  const fmt = n => String(n).replace('.', ',');
+  const elapsedSec = () => (run.before + (run.running ? performance.now() - run.startedAt : 0)) / 1000;
+  const cycle = () => cfg.inh + cfg.hin + cfg.exh + cfg.hex;
+
+  // Фаза в момент t: вдох, задержка (после вдоха), выдох, пауза (после выдоха)
+  function phaseAt(t) {
+    const c = cycle(), x = ((t % c) + c) % c;
+    const segs = [['inhale', cfg.inh], ['holdIn', cfg.hin], ['exhale', cfg.exh], ['holdOut', cfg.hex]];
+    let start = 0;
+    for (const [name, len] of segs) {
+      if (len > 0 && x < start + len) return { name, len, pos: x - start };
+      start += len;
+    }
+    return { name: 'inhale', len: cfg.inh, pos: 0 };
+  }
+
+  // Уровень вдоха 0..1 в момент t (плавная косинусная кривая)
+  function level(t) {
+    const p = phaseAt(t);
+    switch (p.name) {
+      case 'inhale': return (1 - Math.cos(Math.PI * p.pos / p.len)) / 2;
+      case 'holdIn': return 1;
+      case 'exhale': return (1 + Math.cos(Math.PI * p.pos / p.len)) / 2;
+      default: return 0;
+    }
+  }
+
+  // ---------- Звук ----------
+  function chime(freq) {
+    if (!cfg.sound || !audio) return;
+    const t0 = audio.currentTime;
+    const osc = audio.createOscillator(), g = audio.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
+    osc.connect(g).connect(audio.destination);
+    osc.start(t0); osc.stop(t0 + 1.2);
+  }
+
+  // ---------- Экран не гаснет ----------
+  async function lockScreen() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+  }
+  function unlockScreen() { try { wakeLock && wakeLock.release(); } catch (_) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && run.running) lockScreen();
+  });
+
+  // ---------- Отрисовка настроек ----------
+  function renderSettings() {
+    el.inVal.innerHTML = fmt(cfg.inh) + '<small>сек</small>';
+    el.hinVal.innerHTML = fmt(cfg.hin) + '<small>сек</small>';
+    el.exVal.innerHTML = fmt(cfg.exh) + '<small>сек</small>';
+    el.hexVal.innerHTML = fmt(cfg.hex) + '<small>сек</small>';
+    el.inMinus.disabled = run.running || cfg.inh <= MIN_S;
+    el.inPlus.disabled = run.running || cfg.inh >= MAX_S;
+    el.exMinus.disabled = run.running || cfg.exh <= MIN_S;
+    el.exPlus.disabled = run.running || cfg.exh >= MAX_S;
+    el.hinMinus.disabled = run.running || cfg.hin <= 0;
+    el.hinPlus.disabled = run.running || cfg.hin >= MAX_S;
+    el.hexMinus.disabled = run.running || cfg.hex <= 0;
+    el.hexPlus.disabled = run.running || cfg.hex >= MAX_S;
+    el.presets.querySelectorAll('button').forEach(b => {
+      b.disabled = run.running;
+      const p = b.dataset.p.split(',').map(Number);
+      b.setAttribute('aria-pressed',
+        String(p[0] === cfg.inh && p[1] === cfg.hin && p[2] === cfg.exh && p[3] === cfg.hex));
+    });
+    el.durations.querySelectorAll('button').forEach(b => {
+      b.disabled = run.running;
+      b.setAttribute('aria-pressed', String(+b.dataset.m === cfg.dur));
+    });
+    el.sound.textContent = cfg.sound ? 'Вкл' : 'Выкл';
+    el.sound.setAttribute('aria-pressed', String(cfg.sound));
+    const bpm = 60 / cycle();
+    el.summary.innerHTML =
+      `Цикл <b>${fmt(cycle())} сек</b>, это <b>${fmt(bpm.toFixed(1))}</b> дыханий в минуту. ` +
+      `За сеанс — примерно <b>${Math.round(cfg.dur * bpm)}</b>.`;
+  }
+
+  function setPhaseUI(phase) {
+    const hold = phase === 'holdIn' || phase === 'holdOut';
+    el.wrap.classList.toggle('exhale', phase === 'exhale');
+    el.wrap.classList.toggle('idle', phase === 'idle');
+    el.wrap.classList.toggle('hold', hold);
+    el.center.classList.toggle('idle', phase === 'idle');
+    el.center.classList.toggle('hold', hold);
+  }
+
+  function showIdle(titleText, subText) {
+    setPhaseUI('idle');
+    el.word.textContent = titleText;
+    el.count.textContent = subText;
+    el.arc.style.strokeDashoffset = ARC_LEN;
+    el.orb.style.transform = 'scale(.38)';
+  }
+
+  // ---------- Волна-подсказка ----------
+  const ctx = el.wave.getContext('2d');
+  function drawWave(t) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = el.wave.clientWidth, h = el.wave.clientHeight;
+    if (el.wave.width !== Math.round(w * dpr) || el.wave.height !== Math.round(h * dpr)) {
+      el.wave.width = Math.round(w * dpr); el.wave.height = Math.round(h * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const span = cycle() * 2, nowX = w * 0.3, padY = 14;
+    const y = L => h - padY - L * (h - padY * 2);
+    const xOf = s => nowX + (s - t) / span * w;
+    const tStart = t - 0.3 * span, tEnd = t + 0.7 * span;
+
+    const path = (from, to) => {
+      ctx.beginPath();
+      const n = 160;
+      for (let i = 0; i <= n; i++) {
+        const s = from + (to - from) * i / n;
+        i ? ctx.lineTo(xOf(s), y(level(s))) : ctx.moveTo(xOf(s), y(level(s)));
+      }
+    };
+
+    // прошлое: заливка и плотная линия
+    path(tStart, t);
+    ctx.lineTo(nowX, h); ctx.lineTo(0, h); ctx.closePath();
+    ctx.fillStyle = 'rgba(127,224,208,.14)'; ctx.fill();
+    path(tStart, t);
+    ctx.strokeStyle = 'rgba(163,184,192,.8)'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
+
+    // будущее: пунктир
+    path(t, tEnd);
+    ctx.setLineDash([2, 8]); ctx.lineCap = 'round';
+    ctx.strokeStyle = '#e9f2f3'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.setLineDash([]);
+
+    // метка «сейчас»
+    const pn = phaseAt(t).name;
+    const col = pn === 'inhale' ? INHALE_COLOR : pn === 'exhale' ? EXHALE_COLOR : HOLD_COLOR;
+    ctx.strokeStyle = 'rgba(233,242,243,.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(nowX, 4); ctx.lineTo(nowX, h - 4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(nowX, y(level(t)), 9, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+  }
+
+  // ---------- Основной цикл ----------
+  function frame() {
+    const t = elapsedSec();
+    const total = cfg.dur * 60;
+
+    if (run.running && t >= total) { finish(); }
+
+    const active = run.running || t > 0;
+    if (active && !run.finished) {
+      const c = cycle();
+      const { name: phase, len: phaseLen, pos: phaseT } = phaseAt(t);
+
+      if (run.running && phase !== run.lastPhase) chime(PHASE_TONE[phase]);
+      run.lastPhase = phase;
+
+      setPhaseUI(phase);
+      el.word.textContent = PHASE_WORD[phase];
+      el.count.textContent = Math.max(1, Math.ceil(phaseLen - phaseT));
+      el.arc.style.strokeDashoffset = ARC_LEN * (1 - phaseT / phaseLen);
+      el.orb.style.transform = `scale(${0.38 + 0.62 * level(t)})`;
+      el.breaths.textContent = Math.floor(t / c);
+      const rem = Math.max(0, Math.ceil(total - t));
+      el.timeLeft.textContent = `${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}`;
+    }
+    drawWave(run.finished ? 0 : t);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Управление ----------
+  function start() {
+    if (run.finished) resetSession(false);
+    if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+    if (audio && audio.state === 'suspended') audio.resume();
+    run.running = true;
+    run.startedAt = performance.now();
+    run.lastPhase = null;
+    el.go.textContent = 'Пауза';
+    el.reset.disabled = false;
+    lockScreen();
+    renderSettings();
+  }
+  function pause() {
+    run.before += performance.now() - run.startedAt;
+    run.running = false;
+    el.go.textContent = 'Продолжить';
+    unlockScreen();
+    renderSettings();
+  }
+  function finish() {
+    const t = cfg.dur * 60;
+    run.running = false; run.finished = true; run.before = 0;
+    unlockScreen();
+    const n = Math.floor(t / cycle());
+    el.breaths.textContent = n;
+    el.timeLeft.textContent = '0:00';
+    showIdle('Готово', `${n} дыханий за ${cfg.dur} мин`);
+    el.go.textContent = 'Начать снова';
+    el.reset.disabled = true;
+    chime(523);
+    renderSettings();
+  }
+  function resetSession(redraw = true) {
+    run.running = false; run.finished = false; run.before = 0; run.lastPhase = null;
+    unlockScreen();
+    el.go.textContent = 'Начать';
+    el.reset.disabled = true;
+    el.breaths.textContent = '0';
+    el.timeLeft.textContent = `${cfg.dur}:00`;
+    showIdle('Готовы?', 'Нажмите «Начать»');
+    if (redraw) renderSettings();
+  }
+
+  el.go.addEventListener('click', () => run.running ? pause() : start());
+  el.reset.addEventListener('click', () => resetSession());
+
+  const bump = (key, d) => {
+    const min = (key === 'hin' || key === 'hex') ? 0 : MIN_S;
+    cfg[key] = Math.min(MAX_S, Math.max(min, cfg[key] + d));
+    save(); renderSettings();
+  };
+  el.inMinus.addEventListener('click', () => bump('inh', -STEP));
+  el.inPlus.addEventListener('click', () => bump('inh', STEP));
+  el.exMinus.addEventListener('click', () => bump('exh', -STEP));
+  el.exPlus.addEventListener('click', () => bump('exh', STEP));
+  el.hinMinus.addEventListener('click', () => bump('hin', -STEP));
+  el.hinPlus.addEventListener('click', () => bump('hin', STEP));
+  el.hexMinus.addEventListener('click', () => bump('hex', -STEP));
+  el.hexPlus.addEventListener('click', () => bump('hex', STEP));
+
+  el.presets.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || run.running) return;
+    [cfg.inh, cfg.hin, cfg.exh, cfg.hex] = b.dataset.p.split(',').map(Number);
+    save(); renderSettings();
+  });
+  el.durations.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || run.running) return;
+    cfg.dur = +b.dataset.m; save();
+    if (!run.finished && run.before === 0) el.timeLeft.textContent = `${cfg.dur}:00`;
+    renderSettings();
+  });
+  el.sound.addEventListener('click', () => { cfg.sound = !cfg.sound; save(); renderSettings(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
+      e.preventDefault(); run.running ? pause() : start();
+    }
+  });
+
+  // Старт
+  resetSession();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
